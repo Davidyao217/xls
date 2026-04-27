@@ -501,6 +501,10 @@ export function initUI(engine) {
     if (e.key === 'Enter') { e.preventDefault(); gc.focus(); selectCell(sc, sr + 1); }
   });
 
+  document.getElementById('file-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); gc.focus(); }
+  });
+
   document.getElementById('ex').addEventListener('click', () => {
     let mr = 0, mc = 0;
     const data = engine.getData(), cache = engine.getCache();

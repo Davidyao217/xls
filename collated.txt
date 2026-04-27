@@ -314,6 +314,9 @@ export function initUI(engine) {
   let sc = 0, sr = 1;
   let editing = false;
   let rangeMode = false;
+  let anchorCol = 0, anchorRow = 1;
+  let endCol = 0, endRow = 1;
+  let dragging = false;
 
   const grid = document.getElementById('g');
   const gc = document.getElementById('gc');
@@ -339,15 +342,28 @@ export function initUI(engine) {
     const oi = mid(sc, sr), ni = mid(c, r);
     if (inp[oi]) inp[oi].classList.remove('sel');
     sc = c; sr = r;
+    anchorCol = endCol = c;
+    anchorRow = endRow = r;
     inp[ni].classList.add('sel');
     inp[ni].scrollIntoView({ block: 'nearest', inline: 'nearest' });
     aci.textContent = ni;
     fb.value = engine.getData()[ni] || '';
   }
 
+  function highlightRange() {
+    for (const id in inp) inp[id].classList.remove('range');
+    const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
+    const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
+    for (let c = c1; c <= c2; c++)
+      for (let r = r1; r <= r2; r++)
+        inp[mid(c, r)]?.classList.add('range');
+    rangeMode = (c1 !== c2 || r1 !== r2);
+  }
+
   function selectAll() {
-    for (const id in inp) inp[id].classList.add('range');
-    rangeMode = true;
+    anchorCol = 0; anchorRow = 1;
+    endCol = COLS - 1; endRow = ROWS;
+    highlightRange();
   }
 
   function clearRange() {
@@ -404,8 +420,31 @@ export function initUI(engine) {
     if (!t) return;
     if (editing) commitEdit();
     const id = t.id.slice(1);
-    selectCell(id.charCodeAt(0) - 65, +id.slice(1));
+    const c = id.charCodeAt(0) - 65, r = +id.slice(1);
+    if (e.shiftKey) {
+      endCol = c; endRow = r;
+      sc = c; sr = r;
+      const ni = mid(c, r);
+      aci.textContent = ni;
+      fb.value = engine.getData()[ni] || '';
+      highlightRange();
+    } else {
+      selectCell(c, r);
+      dragging = true;
+    }
   });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cv');
+    if (!t) return;
+    const id = t.id.slice(1);
+    endCol = id.charCodeAt(0) - 65;
+    endRow = +id.slice(1);
+    highlightRange();
+  });
+
+  document.addEventListener('mouseup', () => { dragging = false; });
 
   grid.addEventListener('dblclick', e => {
     if (e.target.closest('.cv')) startEdit();
@@ -423,17 +462,14 @@ export function initUI(engine) {
         e.preventDefault();
         
         if (rangeMode) {
-        // Bulk Copy
-        let mr = 1, mc = 0;
-        const data = engine.getData(), cache = engine.getCache();
-        for (const id in data) if (data[id] !== '') {
-            mc = Math.max(mc, id.charCodeAt(0) - 65);
-            mr = Math.max(mr, +id.slice(1));
-        }
+        // Range Copy
+        const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
+        const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
+        const cache = engine.getCache();
         let out = '';
-        for (let r = 1; r <= mr; r++) {
+        for (let r = r1; r <= r2; r++) {
             const row = [];
-            for (let c = 0; c <= mc; c++) row.push(cache[mid(c, r)] ?? '');
+            for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
             out += row.join('\t') + '\n';
         }
         navigator.clipboard.writeText(out);
@@ -447,14 +483,34 @@ export function initUI(engine) {
 
     // Handle Cut (Cmd/Ctrl + X)
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'x') {
-        if (editing || rangeMode) return;
+        if (editing) return;
         e.preventDefault();
-        const val = engine.getData()[mid(sc, sr)] || '';
-        navigator.clipboard.writeText(val).then(() => {
-        engine.pushHistory();
-        engine.setCell(mid(sc, sr), '');
-        fb.value = '';
-        });
+        if (rangeMode) {
+          const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
+          const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
+          const cache = engine.getCache();
+          let out = '';
+          for (let r = r1; r <= r2; r++) {
+            const row = [];
+            for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
+            out += row.join('\t') + '\n';
+          }
+          navigator.clipboard.writeText(out).then(() => {
+            engine.pushHistory();
+            for (let r = r1; r <= r2; r++)
+              for (let c = c1; c <= c2; c++)
+                engine.setCell(mid(c, r), '');
+            clearRange();
+            fb.value = '';
+          });
+        } else {
+          const val = engine.getData()[mid(sc, sr)] || '';
+          navigator.clipboard.writeText(val).then(() => {
+            engine.pushHistory();
+            engine.setCell(mid(sc, sr), '');
+            fb.value = '';
+          });
+        }
         return;
     }
 
@@ -471,14 +527,33 @@ export function initUI(engine) {
     }
 
     if (rangeMode && (k === 'Backspace' || k === 'Delete')) {
-      e.preventDefault(); engine.clearAllCells(); clearRange(); fb.value = ''; return;
+      e.preventDefault();
+      engine.pushHistory();
+      const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
+      const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
+      for (let r = r1; r <= r2; r++)
+        for (let c = c1; c <= c2; c++)
+          engine.setCell(mid(c, r), '');
+      clearRange();
+      fb.value = '';
+      return;
     }
 
     if (ARROW_DELTA[k]) {
       e.preventDefault();
       const [dc, dr] = ARROW_DELTA[k];
       if (editing) commitEdit();
-      selectCell(sc + dc, sr + dr);
+      if (e.shiftKey) {
+        endCol = Math.max(0, Math.min(endCol + dc, COLS - 1));
+        endRow = Math.max(1, Math.min(endRow + dr, ROWS));
+        sc = endCol; sr = endRow;
+        inp[mid(sc, sr)]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        aci.textContent = mid(sc, sr);
+        fb.value = engine.getData()[mid(sc, sr)] || '';
+        highlightRange();
+      } else {
+        selectCell(sc + dc, sr + dr);
+      }
       return;
     }
 
@@ -503,10 +578,22 @@ export function initUI(engine) {
     if (editing || document.activeElement === fb || document.activeElement === editor) return;
     e.preventDefault();
     const text = (e.clipboardData || window.clipboardData).getData('text');
-    if (text !== undefined && text !== '') {
-      engine.pushHistory();
+    if (!text) return;
+    engine.pushHistory();
+    const rows = text.split('\n').filter(r => r.length > 0);
+    if (rows.length === 1 && !rows[0].includes('\t')) {
       engine.setCell(mid(sc, sr), text);
       fb.value = text;
+    } else {
+      for (let dr = 0; dr < rows.length; dr++) {
+        const cols = rows[dr].split('\t');
+        for (let dc = 0; dc < cols.length; dc++) {
+          const tc = sc + dc, tr = sr + dr;
+          if (tc < COLS && tr <= ROWS)
+            engine.setCell(mid(tc, tr), cols[dc]);
+        }
+      }
+      fb.value = engine.getData()[mid(sc, sr)] || '';
     }
   });
 

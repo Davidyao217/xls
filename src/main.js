@@ -1,5 +1,6 @@
 import * as engine from '../src/engine.js';
 import { initUI } from '../src/ui.js';
+import { parseId, mid } from '../src/parser.js';
 
 // 1. Initialize the UI and pass it the engine to bind to
 initUI(engine);
@@ -17,15 +18,41 @@ window.addEventListener('beforeunload', (e) => {
 let tokenClient;
 let currentAccessToken = null;
 let currentFileId = null;
+let isUnsaved = false;
+
+const svBtn = document.getElementById('sv');
+const titleInput = document.getElementById('file-title');
+
+function markUnsaved() {
+    isUnsaved = true;
+    svBtn.classList.add('unsaved');
+}
+
+function markSaved() {
+    isUnsaved = false;
+    svBtn.classList.remove('unsaved');
+    svBtn.textContent = 'Sync to Drive';
+}
+
+engine.subscribe(() => markUnsaved());
+titleInput.addEventListener('input', () => markUnsaved());
 
 window.onload = () => {
+    const storedToken = localStorage.getItem('drive_access_token');
+    const storedExpiry = localStorage.getItem('drive_token_expiry');
+    if (storedToken && storedExpiry && Date.now() < parseInt(storedExpiry)) {
+        currentAccessToken = storedToken;
+    }
+
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: '508217834882-hvbos0eqf369vebbtif9mghn56neolsr.apps.googleusercontent.com',
         scope: 'https://www.googleapis.com/auth/drive.file',
         callback: (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
-                // Cache the token in memory for immediate use
                 currentAccessToken = tokenResponse.access_token;
+                localStorage.setItem('drive_access_token', currentAccessToken);
+                const expiresIn = tokenResponse.expires_in || 3599;
+                localStorage.setItem('drive_token_expiry', Date.now() + (expiresIn * 1000));
                 executeDriveUpload(currentAccessToken);
             }
         },
@@ -33,31 +60,50 @@ window.onload = () => {
 };
 
 document.getElementById('sv').addEventListener('click', () => {
-    if (currentAccessToken) {
+    if (currentAccessToken && localStorage.getItem('drive_token_expiry') && Date.now() < parseInt(localStorage.getItem('drive_token_expiry'))) {
         executeDriveUpload(currentAccessToken);
     } else {
         tokenClient.requestAccessToken();
     }
 });
 
-function executeDriveUpload(accessToken) {
-    // 1. Extract engine state
-    const fileContent = JSON.stringify(engine.getData());
-    const fileBlob = new Blob([fileContent], { type: 'application/json' });
+function generateCSV() {
+    let mr = 0, mc = 0;
+    const data = engine.getData(), cache = engine.getCache();
+    for (const k in data) {
+        if (data[k] !== '') {
+            const [c, r] = parseId(k);
+            mc = Math.max(mc, c);
+            mr = Math.max(mr, r);
+        }
+    }
+    let csv = '';
+    for (let r = 1; r <= mr; r++) {
+        const row = [];
+        for (let c = 0; c <= mc; c++) {
+            const v = cache[mid(c, r)] ?? '';
+            row.push('"' + String(v).replace(/"/g, '""') + '"');
+        }
+        csv += row.join(',') + '\n';
+    }
+    return csv;
+}
 
-    // 2. Define Drive metadata
+function executeDriveUpload(accessToken) {
+    const title = titleInput.value.trim() || 'untitled';
+    const csvContent = generateCSV();
+    const fileBlob = new Blob([csvContent], { type: 'text/csv' });
+
     const metadata = {
-        name: `xls-sh-workbook.json`,
-        mimeType: 'application/json'
+        name: `${title}.csv`,
+        mimeType: 'text/csv'
     };
     const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' });
 
-    // 3. Construct multipart payload
     const form = new FormData();
     form.append('metadata', metadataBlob);
     form.append('file', fileBlob);
 
-    // 4. Upload (POST for new file, PATCH for updating existing file)
     const method = currentFileId ? 'PATCH' : 'POST';
     const url = currentFileId
         ? `https://www.googleapis.com/upload/drive/v3/files/${currentFileId}?uploadType=multipart`
@@ -72,8 +118,9 @@ function executeDriveUpload(accessToken) {
     })
         .then(res => {
             if (res.status === 401) {
-                // Token expired. Clear cache and re-request.
                 currentAccessToken = null;
+                localStorage.removeItem('drive_access_token');
+                localStorage.removeItem('drive_token_expiry');
                 tokenClient.requestAccessToken();
                 throw new Error('Token expired, prompting re-auth.');
             }
@@ -81,10 +128,9 @@ function executeDriveUpload(accessToken) {
         })
         .then(data => {
             if (data && data.id) {
-                currentFileId = data.id; // Store ID to overwrite next time
+                currentFileId = data.id;
+                markSaved();
                 console.log(`Successfully saved to Drive. File ID: ${data.id} (Method: ${method})`);
-                // Optional: Flash success to user, e.g. via an alert or toast.
-                // alert('Successfully saved to Drive!');
             }
         })
         .catch(console.error);

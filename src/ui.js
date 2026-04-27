@@ -330,6 +330,13 @@ export function initUI(engine) {
     if (document.activeElement === fb) return;
     const k = e.key;
 
+    // Handle Save (Cmd/Ctrl + S)
+    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 's') {
+      e.preventDefault();
+      document.getElementById('sv').click();
+      return;
+    }
+
     // Handle Copy (Cmd/Ctrl + C)
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'c') {
       if (editing) return; // Let native copy work if editing text
@@ -498,7 +505,8 @@ export function initUI(engine) {
     }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'scratchpad.csv';
+    const title = document.getElementById('file-title').value.trim() || 'untitled';
+    a.download = `${title}.csv`;
     a.click();
   });
 

@@ -5,8 +5,11 @@ header{display:flex;padding:8px 12px;gap:12px;border-bottom:1px solid var(--b);b
 #aci{font-weight:600;min-width:32px;text-align:center}
 #fb{flex:1;padding:4px 8px;border:1px solid var(--b);border-radius:4px;outline:none}
 #fb:focus{border-color:var(--s)}
+#file-title{width:150px;padding:4px 8px;border:1px solid var(--b);border-radius:4px;outline:none;font-weight:600;text-align:center}
+#file-title:focus{border-color:var(--s)}
 button{padding:4px 12px;background:#fff;border:1px solid var(--b);border-radius:4px;cursor:pointer}
 button:hover{background:#f1f5f9}
+button.unsaved{background:#e8f0fe;color:var(--s);border-color:var(--s);font-weight:600}
 #gc{flex:1;overflow:auto;position:relative;outline:none}
 #g{display:grid;width:max-content;contain:layout style}
 .cell{border-right:1px solid var(--b);border-bottom:1px solid var(--b);user-select:none}

@@ -13,10 +13,50 @@
   <header>
     <div id="aci">A1</div>
     <input id="fb" autocomplete="off" spellcheck="false" placeholder="Value or formula">
+    <button id="info-btn" title="Info">i</button>
     <input id="file-title" autocomplete="off" spellcheck="false" value="" placeholder="Untitled">
-    <button id="sv">Save to Drive</button>
+    <button id="sv" class="unsaved">Save to Drive</button>
     <button id="ex">Export CSV</button>
   </header>
+  <div id="info-modal" class="modal-overlay" hidden>
+    <div class="modal-box">
+      <button class="modal-close" id="info-close">&times;</button>
+      <h2>xls.sh</h2>
+
+      <h3>Formulas</h3>
+      <p>Start a cell with <code>=</code> to write a formula. Use cell refs like <code>A1</code> or ranges like <code>A1:C3</code>.</p>
+      <table class="info-table">
+        <tr><td><code>=SUM(A1:A10)</code></td><td>Sum of a range</td></tr>
+        <tr><td><code>=AVERAGE(A1:A10)</code></td><td>Average of a range</td></tr>
+        <tr><td><code>=MIN(A1:A10)</code></td><td>Minimum value</td></tr>
+        <tr><td><code>=MAX(A1:A10)</code></td><td>Maximum value</td></tr>
+        <tr><td><code>=COUNT(A1:A10)</code></td><td>Count of numeric cells</td></tr>
+        <tr><td><code>=ABS(A1)</code></td><td>Absolute value</td></tr>
+        <tr><td><code>=TODAY()</code></td><td>Today's date</td></tr>
+      </table>
+
+      <h3>Keyboard Shortcuts</h3>
+      <table class="info-table">
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>I</kbd></td><td>Open / close this panel</td></tr>
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Save to Drive</td></tr>
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>C</kbd></td><td>Copy</td></tr>
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>V</kbd></td><td>Paste</td></tr>
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>X</kbd></td><td>Cut</td></tr>
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
+        <tr><td><kbd>⌘</kbd>/<kbd>Ctrl</kbd> + <kbd>A</kbd></td><td>Select all</td></tr>
+        <tr><td><kbd>Shift</kbd> + <kbd>Arrow</kbd></td><td>Extend selection</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>Move right / confirm &amp; move right</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Cancel edit / clear selection</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>Edit cell / confirm &amp; move down</td></tr>
+        <tr><td><kbd>Backspace</kbd> / <kbd>Delete</kbd></td><td>Clear cell(s)</td></tr>
+        <tr><td><kbd>Arrow keys</kbd></td><td>Navigate</td></tr>
+      </table>
+
+      <h3>Contact</h3>
+      <p><a href="mailto:davidyao217@gmail.com">davidyao217@gmail.com</a></p>
+    </div>
+  </div>
+
   <div id="gc" tabindex="0">
     <div id="g"></div>
     <input id="ed" autocomplete="off" spellcheck="false">

@@ -33,6 +33,7 @@ export function initUI(engine) {
   const fb = document.getElementById('fb');
   const aci = document.getElementById('aci');
   const editor = document.getElementById('ed');
+  const infoModal = document.getElementById('info-modal');
 
   // Range border overlay
   const rb = document.createElement('div');
@@ -82,7 +83,6 @@ export function initUI(engine) {
     for (const id in inp) inp[id].classList.remove('range');
     const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
     const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
-    rangeMode = (c1 !== c2 || r1 !== r2);
     if (rangeMode) {
       for (let c = c1; c <= c2; c++)
         for (let r = r1; r <= r2; r++)
@@ -103,6 +103,7 @@ export function initUI(engine) {
   function selectAll() {
     anchorCol = 0; anchorRow = 1;
     endCol = COLS - 1; endRow = ROWS;
+    rangeMode = true;
     highlightRange();
   }
 
@@ -158,6 +159,17 @@ export function initUI(engine) {
   function buildRangeRef(c1, r1, c2, r2) {
     if (c1 === c2 && r1 === r2) return mid(c1, r1);
     return mid(Math.min(c1, c2), Math.min(r1, r2)) + ':' + mid(Math.max(c1, c2), Math.max(r1, r2));
+  }
+
+  function serializeRange(c1, r1, c2, r2) {
+    const cache = engine.getCache();
+    let out = '';
+    for (let r = r1; r <= r2; r++) {
+      const row = [];
+      for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
+      out += row.join('\t') + '\n';
+    }
+    return out;
   }
 
   function insertFormulaRef(ref) {
@@ -260,6 +272,7 @@ export function initUI(engine) {
       const ni = mid(c, r);
       aci.textContent = ni;
       fb.value = engine.getData()[ni] ?? '';
+      rangeMode = anchorCol !== endCol || anchorRow !== endRow;
       highlightRange();
     } else {
       selectCell(c, r);
@@ -298,6 +311,7 @@ export function initUI(engine) {
     const [c, r] = parseId(id);
     endCol = c;
     endRow = r;
+    rangeMode = anchorCol !== endCol || anchorRow !== endRow;
     highlightRange();
   });
 
@@ -326,86 +340,86 @@ export function initUI(engine) {
 
   const ARROW_DELTA = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
 
-  document.addEventListener('keydown', e => {
-    if (document.activeElement === fb) return;
-    const k = e.key;
+  function handleHotkey(e) {
+    const k = e.key.toLowerCase();
 
-    // Handle Save (Cmd/Ctrl + S)
-    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 's') {
+    if (k === 's') {
       e.preventDefault();
       document.getElementById('sv').click();
-      return;
+      return true;
     }
 
-    // Handle Copy (Cmd/Ctrl + C)
-    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'c') {
-      if (editing) return; // Let native copy work if editing text
+    if (k === 'c') {
+      if (editing) return false;
       e.preventDefault();
-
       if (rangeMode) {
-        // Range Copy
         const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
         const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
-        const cache = engine.getCache();
-        let out = '';
-        for (let r = r1; r <= r2; r++) {
-          const row = [];
-          for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
-          out += row.join('\t') + '\n';
-        }
-        navigator.clipboard.writeText(out).catch(e => console.error('Clipboard error', e));
+        navigator.clipboard.writeText(serializeRange(c1, r1, c2, r2)).catch(err => console.error('Clipboard error', err));
       } else {
-        // Single Cell Copy (Copies the raw data/formula)
-        const val = engine.getData()[mid(sc, sr)] ?? '';
-        navigator.clipboard.writeText(val).catch(e => console.error('Clipboard error', e));
+        navigator.clipboard.writeText(engine.getData()[mid(sc, sr)] ?? '').catch(err => console.error('Clipboard error', err));
       }
-      return;
+      return true;
     }
 
-    // Handle Cut (Cmd/Ctrl + X)
-    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'x') {
-      if (editing) return;
+    if (k === 'x') {
+      if (editing) return false;
       e.preventDefault();
       if (rangeMode) {
         const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
         const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
-        const cache = engine.getCache();
-        let out = '';
-        for (let r = r1; r <= r2; r++) {
-          const row = [];
-          for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
-          out += row.join('\t') + '\n';
-        }
-        navigator.clipboard.writeText(out).then(() => {
+        navigator.clipboard.writeText(serializeRange(c1, r1, c2, r2)).then(() => {
           engine.pushHistory();
           for (let r = r1; r <= r2; r++)
             for (let c = c1; c <= c2; c++)
               engine.setCell(mid(c, r), '');
           clearRange();
           fb.value = '';
-        }).catch(e => console.error('Clipboard error', e));
+        }).catch(err => console.error('Clipboard error', err));
       } else {
-        const val = engine.getData()[mid(sc, sr)] ?? '';
-        navigator.clipboard.writeText(val).then(() => {
+        navigator.clipboard.writeText(engine.getData()[mid(sc, sr)] ?? '').then(() => {
           engine.pushHistory();
           engine.setCell(mid(sc, sr), '');
           fb.value = '';
-        }).catch(e => console.error('Clipboard error', e));
+        }).catch(err => console.error('Clipboard error', err));
       }
-      return;
+      return true;
     }
 
-    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') {
-      if (editing) return;
+    if (k === 'z') {
+      if (editing) return false;
       e.preventDefault();
       if (engine.undo()) fb.value = engine.getData()[mid(sc, sr)] ?? '';
-      return;
+      return true;
     }
 
-    if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'a') {
-      if (editing) return;
-      e.preventDefault(); selectAll(); return;
+    if (k === 'a') {
+      if (editing) return false;
+      e.preventDefault();
+      selectAll();
+      return true;
     }
+
+    if (k === 'i') {
+      e.preventDefault();
+      infoModal.hidden = !infoModal.hidden;
+      if (infoModal.hidden) gc.focus();
+      return true;
+    }
+
+    return false;
+  }
+
+  document.addEventListener('keydown', e => {
+    if (!infoModal.hidden) {
+      if (e.key === 'Escape') { infoModal.hidden = true; gc.focus(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); infoModal.hidden = true; gc.focus(); }
+      return;
+    }
+    if (document.activeElement === fb || document.activeElement.id === 'file-title') return;
+    const k = e.key;
+
+    if ((e.ctrlKey || e.metaKey) && handleHotkey(e)) return;
 
     if (rangeMode && (k === 'Backspace' || k === 'Delete')) {
       e.preventDefault();
@@ -431,6 +445,7 @@ export function initUI(engine) {
         inp[mid(sc, sr)]?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         aci.textContent = mid(sc, sr);
         fb.value = engine.getData()[mid(sc, sr)] ?? '';
+        rangeMode = anchorCol !== endCol || anchorRow !== endRow;
         highlightRange();
       } else {
         selectCell(sc + dc, sr + dr);
@@ -456,7 +471,7 @@ export function initUI(engine) {
   });
 
   document.addEventListener('paste', e => {
-    if (editing || document.activeElement === fb || document.activeElement === editor) return;
+    if (editing || document.activeElement === fb || document.activeElement === editor || document.activeElement.id === 'file-title') return;
     e.preventDefault();
     const text = (e.clipboardData || window.clipboardData).getData('text');
     if (!text) return;
@@ -508,6 +523,18 @@ export function initUI(engine) {
     const title = document.getElementById('file-title').value.trim() || 'untitled';
     a.download = `${title}.csv`;
     a.click();
+  });
+
+  // Info modal
+  document.getElementById('info-btn').addEventListener('click', () => {
+    infoModal.hidden = false;
+  });
+  document.getElementById('info-close').addEventListener('click', () => {
+    infoModal.hidden = true;
+    gc.focus();
+  });
+  infoModal.addEventListener('click', e => {
+    if (e.target === infoModal) { infoModal.hidden = true; gc.focus(); }
   });
 
   // Boot UI

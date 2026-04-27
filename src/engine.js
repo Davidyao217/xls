@@ -5,14 +5,16 @@ const FN = {
   AVERAGE: a => { const n = a.filter(x => x !== '' && !isNaN(+x)); return n.length ? FN.SUM(n) / n.length : 0; },
   MIN: a => { const n = a.map(Number).filter(x => !isNaN(x)); return n.length ? Math.min(...n) : 0; },
   MAX: a => { const n = a.map(Number).filter(x => !isNaN(x)); return n.length ? Math.max(...n) : 0; },
-  COUNT: a => a.filter(x => x !== '' && !isNaN(+x)).length
+  COUNT: a => a.filter(x => x !== '' && !isNaN(+x)).length,
+  TODAY: a => new Date().toISOString().split('T')[0],
+  ABS: a => Math.abs(a[0])
 };
 
-const data = {};   
-const cache = {};  
-const comp = {};   
-const fwd = {};    
-const rev = {};    
+const data = {};
+const cache = {};
+const comp = {};
+const fwd = {};
+const rev = {};
 const history = [];
 let subscribers = [];
 

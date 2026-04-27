@@ -2,6 +2,10 @@ import { colName, mid } from './parser.js';
 
 export function initUI(engine) {
   const COLS = 26, ROWS = 50;
+  const DEFAULT_COL_W = 109, DEFAULT_ROW_H = 24;
+  const MIN_COL_W = 30, MIN_ROW_H = 16;
+  const colWidths = Array(COLS).fill(DEFAULT_COL_W);
+  const rowHeights = Array(ROWS).fill(DEFAULT_ROW_H);
   const inp = {};
   let sc = 0, sr = 1;
   let editing = false;
@@ -10,21 +14,48 @@ export function initUI(engine) {
   let endCol = 0, endRow = 1;
   let dragging = false;
 
+  // Resize state
+  let resizeType = null;   // 'col' | 'row' | null
+  let resizeIndex = -1;
+  let resizeStart = 0;
+  let resizeOrigSize = 0;
+
+  // Formula range selection state
+  let formulaRangeMode = false;
+  let formulaInsertPos = 0;
+  let formulaPrevRefLen = 0;
+  let formulaActiveInput = null;
+  let formulaDragAnchorCol = 0;
+  let formulaDragAnchorRow = 1;
+
   const grid = document.getElementById('g');
   const gc = document.getElementById('gc');
   const fb = document.getElementById('fb');
   const aci = document.getElementById('aci');
   const editor = document.getElementById('ed');
 
+  // Range border overlay
+  const rb = document.createElement('div');
+  rb.id = 'rb';
+  grid.appendChild(rb);
+
+  function updateGridTemplate() {
+    grid.style.gridTemplateColumns = '40px ' + colWidths.map(w => w + 'px').join(' ');
+    grid.style.gridTemplateRows = 'auto ' + rowHeights.map(h => h + 'px').join(' ');
+  }
+
   function buildGrid() {
     let h = '<div class="cell ch corner"></div>';
-    for (let c = 0; c < COLS; c++) h += `<div class="cell ch col">${colName(c)}</div>`;
+    for (let c = 0; c < COLS; c++)
+      h += `<div class="cell ch col" data-col="${c}">${colName(c)}<div class="col-resize-handle" data-resize-col="${c}"></div></div>`;
     for (let r = 1; r <= ROWS; r++) {
-      h += `<div class="cell ch row">${r}</div>`;
+      h += `<div class="cell ch row" data-row="${r}">${r}<div class="row-resize-handle" data-resize-row="${r}"></div></div>`;
       for (let c = 0; c < COLS; c++) h += `<div class="cell cv" id="x${mid(c, r)}"></div>`;
     }
     grid.innerHTML = h;
+    grid.appendChild(rb);
     for (const el of grid.querySelectorAll('.cv')) inp[el.id.slice(1)] = el;
+    updateGridTemplate();
   }
 
   function selectCell(c, r) {
@@ -46,10 +77,22 @@ export function initUI(engine) {
     for (const id in inp) inp[id].classList.remove('range');
     const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
     const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
-    for (let c = c1; c <= c2; c++)
-      for (let r = r1; r <= r2; r++)
-        inp[mid(c, r)]?.classList.add('range');
     rangeMode = (c1 !== c2 || r1 !== r2);
+    if (rangeMode) {
+      for (let c = c1; c <= c2; c++)
+        for (let r = r1; r <= r2; r++)
+          inp[mid(c, r)]?.classList.add('range');
+      const tl = inp[mid(c1, r1)], br = inp[mid(c2, r2)];
+      if (tl && br) {
+        rb.style.left = tl.offsetLeft + 'px';
+        rb.style.top = tl.offsetTop + 'px';
+        rb.style.width = (br.offsetLeft + br.offsetWidth - tl.offsetLeft) + 'px';
+        rb.style.height = (br.offsetTop + br.offsetHeight - tl.offsetTop) + 'px';
+        rb.style.display = 'block';
+      }
+    } else {
+      rb.style.display = 'none';
+    }
   }
 
   function selectAll() {
@@ -59,8 +102,8 @@ export function initUI(engine) {
   }
 
   function clearRange() {
-    if (!rangeMode) return;
     for (const id in inp) inp[id].classList.remove('range');
+    rb.style.display = 'none';
     rangeMode = false;
   }
 
@@ -97,6 +140,46 @@ export function initUI(engine) {
     gc.focus();
   }
 
+  // --- Formula range selection helpers ---
+  function isFormulaInsertPosition(input) {
+    const val = input.value;
+    if (!val.startsWith('=')) return false;
+    const before = val.slice(0, input.selectionStart).trimEnd();
+    if (!before.length) return false;
+    const last = before[before.length - 1];
+    return last === '(' || last === ',';
+  }
+
+  function buildRangeRef(c1, r1, c2, r2) {
+    if (c1 === c2 && r1 === r2) return mid(c1, r1);
+    return mid(Math.min(c1, c2), Math.min(r1, r2)) + ':' + mid(Math.max(c1, c2), Math.max(r1, r2));
+  }
+
+  function insertFormulaRef(ref) {
+    const input = formulaActiveInput;
+    const val = input.value;
+    const newVal = val.slice(0, formulaInsertPos) + ref + val.slice(formulaInsertPos + formulaPrevRefLen);
+    input.value = newVal;
+    formulaPrevRefLen = ref.length;
+    const cur = formulaInsertPos + ref.length;
+    input.setSelectionRange(cur, cur);
+    if (input === editor) fb.value = newVal;
+    else if (input === fb && editing) editor.value = newVal;
+  }
+
+  function highlightFormulaRange(c1, r1, c2, r2) {
+    clearFormulaHighlight();
+    const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
+    const minR = Math.min(r1, r2), maxR = Math.max(r1, r2);
+    for (let c = minC; c <= maxC; c++)
+      for (let r = minR; r <= maxR; r++)
+        inp[mid(c, r)]?.classList.add('formula-ref');
+  }
+
+  function clearFormulaHighlight() {
+    for (const id in inp) inp[id].classList.remove('formula-ref');
+  }
+
   // Subscribe to engine updates
   engine.subscribe(updates => {
     for (const [id, v] of updates) {
@@ -106,13 +189,56 @@ export function initUI(engine) {
     }
   });
 
-  // Events
+  // --- Resize event handlers ---
   grid.addEventListener('mousedown', e => {
+    // Column resize handle
+    const colHandle = e.target.closest('[data-resize-col]');
+    if (colHandle) {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeType = 'col';
+      resizeIndex = +colHandle.dataset.resizeCol;
+      resizeStart = e.clientX;
+      resizeOrigSize = colWidths[resizeIndex];
+      colHandle.classList.add('active');
+      document.body.classList.add('col-resizing');
+      return;
+    }
+    // Row resize handle
+    const rowHandle = e.target.closest('[data-resize-row]');
+    if (rowHandle) {
+      e.preventDefault();
+      e.stopPropagation();
+      resizeType = 'row';
+      resizeIndex = +rowHandle.dataset.resizeRow;
+      resizeStart = e.clientY;
+      resizeOrigSize = rowHeights[resizeIndex - 1];
+      rowHandle.classList.add('active');
+      document.body.classList.add('row-resizing');
+      return;
+    }
+
     const t = e.target.closest('.cv');
     if (!t) return;
-    if (editing) commitEdit();
     const id = t.id.slice(1);
     const c = id.charCodeAt(0) - 65, r = +id.slice(1);
+
+    // Formula range selection: insert cell ref instead of navigating
+    const activeInput = editing ? editor : (document.activeElement === fb ? fb : null);
+    if (activeInput && isFormulaInsertPosition(activeInput)) {
+      e.preventDefault();
+      formulaRangeMode = true;
+      formulaActiveInput = activeInput;
+      formulaInsertPos = activeInput.selectionStart;
+      formulaPrevRefLen = 0;
+      formulaDragAnchorCol = c;
+      formulaDragAnchorRow = r;
+      insertFormulaRef(mid(c, r));
+      highlightFormulaRange(c, r, c, r);
+      return;
+    }
+
+    if (editing) commitEdit();
     if (e.shiftKey) {
       endCol = c; endRow = r;
       sc = c; sr = r;
@@ -127,6 +253,29 @@ export function initUI(engine) {
   });
 
   document.addEventListener('mousemove', e => {
+    // Handle resize drag
+    if (resizeType === 'col') {
+      const delta = e.clientX - resizeStart;
+      colWidths[resizeIndex] = Math.max(MIN_COL_W, resizeOrigSize + delta);
+      updateGridTemplate();
+      return;
+    }
+    if (resizeType === 'row') {
+      const delta = e.clientY - resizeStart;
+      rowHeights[resizeIndex - 1] = Math.max(MIN_ROW_H, resizeOrigSize + delta);
+      updateGridTemplate();
+      return;
+    }
+
+    if (formulaRangeMode) {
+      const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cv');
+      if (!t) return;
+      const id = t.id.slice(1);
+      const c = id.charCodeAt(0) - 65, r = +id.slice(1);
+      insertFormulaRef(buildRangeRef(formulaDragAnchorCol, formulaDragAnchorRow, c, r));
+      highlightFormulaRange(formulaDragAnchorCol, formulaDragAnchorRow, c, r);
+      return;
+    }
     if (!dragging) return;
     const t = document.elementFromPoint(e.clientX, e.clientY)?.closest('.cv');
     if (!t) return;
@@ -136,7 +285,24 @@ export function initUI(engine) {
     highlightRange();
   });
 
-  document.addEventListener('mouseup', () => { dragging = false; });
+  document.addEventListener('mouseup', () => {
+    if (resizeType) {
+      document.querySelectorAll('.col-resize-handle.active, .row-resize-handle.active')
+        .forEach(el => el.classList.remove('active'));
+      document.body.classList.remove('col-resizing', 'row-resizing');
+      resizeType = null;
+      return;
+    }
+    if (formulaRangeMode) {
+      formulaRangeMode = false;
+      clearFormulaHighlight();
+      formulaActiveInput.focus();
+      const cur = formulaInsertPos + formulaPrevRefLen;
+      formulaActiveInput.setSelectionRange(cur, cur);
+      return;
+    }
+    dragging = false;
+  });
 
   grid.addEventListener('dblclick', e => {
     if (e.target.closest('.cv')) startEdit();
@@ -148,68 +314,68 @@ export function initUI(engine) {
     if (document.activeElement === fb) return;
     const k = e.key;
 
-        // Handle Copy (Cmd/Ctrl + C)
+    // Handle Copy (Cmd/Ctrl + C)
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'c') {
-        if (editing) return; // Let native copy work if editing text
-        e.preventDefault();
-        
-        if (rangeMode) {
+      if (editing) return; // Let native copy work if editing text
+      e.preventDefault();
+
+      if (rangeMode) {
         // Range Copy
         const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
         const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
         const cache = engine.getCache();
         let out = '';
         for (let r = r1; r <= r2; r++) {
-            const row = [];
-            for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
-            out += row.join('\t') + '\n';
+          const row = [];
+          for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
+          out += row.join('\t') + '\n';
         }
         navigator.clipboard.writeText(out);
-        } else {
+      } else {
         // Single Cell Copy (Copies the raw data/formula)
         const val = engine.getData()[mid(sc, sr)] || '';
         navigator.clipboard.writeText(val);
-        }
-        return;
+      }
+      return;
     }
 
     // Handle Cut (Cmd/Ctrl + X)
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'x') {
-        if (editing) return;
-        e.preventDefault();
-        if (rangeMode) {
-          const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
-          const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
-          const cache = engine.getCache();
-          let out = '';
-          for (let r = r1; r <= r2; r++) {
-            const row = [];
-            for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
-            out += row.join('\t') + '\n';
-          }
-          navigator.clipboard.writeText(out).then(() => {
-            engine.pushHistory();
-            for (let r = r1; r <= r2; r++)
-              for (let c = c1; c <= c2; c++)
-                engine.setCell(mid(c, r), '');
-            clearRange();
-            fb.value = '';
-          });
-        } else {
-          const val = engine.getData()[mid(sc, sr)] || '';
-          navigator.clipboard.writeText(val).then(() => {
-            engine.pushHistory();
-            engine.setCell(mid(sc, sr), '');
-            fb.value = '';
-          });
+      if (editing) return;
+      e.preventDefault();
+      if (rangeMode) {
+        const c1 = Math.min(anchorCol, endCol), c2 = Math.max(anchorCol, endCol);
+        const r1 = Math.min(anchorRow, endRow), r2 = Math.max(anchorRow, endRow);
+        const cache = engine.getCache();
+        let out = '';
+        for (let r = r1; r <= r2; r++) {
+          const row = [];
+          for (let c = c1; c <= c2; c++) row.push(cache[mid(c, r)] ?? '');
+          out += row.join('\t') + '\n';
         }
-        return;
+        navigator.clipboard.writeText(out).then(() => {
+          engine.pushHistory();
+          for (let r = r1; r <= r2; r++)
+            for (let c = c1; c <= c2; c++)
+              engine.setCell(mid(c, r), '');
+          clearRange();
+          fb.value = '';
+        });
+      } else {
+        const val = engine.getData()[mid(sc, sr)] || '';
+        navigator.clipboard.writeText(val).then(() => {
+          engine.pushHistory();
+          engine.setCell(mid(sc, sr), '');
+          fb.value = '';
+        });
+      }
+      return;
     }
 
     if ((e.ctrlKey || e.metaKey) && k.toLowerCase() === 'z') {
       if (editing) return;
-      e.preventDefault(); 
-      if(engine.undo()) fb.value = engine.getData()[mid(sc, sr)] || '';
+      e.preventDefault();
+      if (engine.undo()) fb.value = engine.getData()[mid(sc, sr)] || '';
       return;
     }
 

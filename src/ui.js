@@ -414,9 +414,9 @@ export function initUI(engine) {
     }
 
     if (ARROW_DELTA[k]) {
+      if (editing) return;
       e.preventDefault();
       const [dc, dr] = ARROW_DELTA[k];
-      if (editing) commitEdit();
       if (e.shiftKey) {
         endCol = Math.max(0, Math.min(endCol + dc, COLS - 1));
         endRow = Math.max(1, Math.min(endRow + dr, ROWS));

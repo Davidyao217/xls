@@ -82,6 +82,49 @@ function generateCSV() {
     return csv;
 }
 
+function parseCSV(text) {
+    const rows = [];
+    let row = [], field = '', inQuotes = false, i = 0;
+    while (i < text.length) {
+        const ch = text[i];
+        if (inQuotes) {
+            if (ch === '"' && text[i + 1] === '"') { field += '"'; i += 2; }
+            else if (ch === '"') { inQuotes = false; i++; }
+            else { field += ch; i++; }
+        } else {
+            if (ch === '"') { inQuotes = true; i++; }
+            else if (ch === ',') { row.push(field); field = ''; i++; }
+            else if (ch === '\r' && text[i + 1] === '\n') { row.push(field); rows.push(row); row = []; field = ''; i += 2; }
+            else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; }
+            else { field += ch; i++; }
+        }
+    }
+    if (field || row.length) { row.push(field); rows.push(row); }
+    return rows;
+}
+
+document.getElementById('im').addEventListener('click', () => {
+    document.getElementById('im-file').click();
+});
+
+document.getElementById('im-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    file.text().then(text => {
+        engine.pushHistory();
+        engine.clearAllCells();
+        parseCSV(text).forEach((row, ri) => {
+            row.forEach((val, ci) => {
+                if (val !== '') engine.setCell(mid(ci, ri + 1), val);
+            });
+        });
+        titleInput.value = file.name.replace(/\.csv$/i, '');
+        currentFileId = null;
+        markUnsaved();
+    });
+    e.target.value = '';
+});
+
 document.getElementById('ex').addEventListener('click', () => {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([generateCSV()], { type: 'text/csv' }));

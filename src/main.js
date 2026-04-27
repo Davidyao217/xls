@@ -37,6 +37,11 @@ function markSaved() {
 engine.subscribe(() => markUnsaved());
 titleInput.addEventListener('input', () => markUnsaved());
 
+function tokenIsValid() {
+    const expiry = localStorage.getItem('drive_token_expiry');
+    return currentAccessToken && expiry && Date.now() < parseInt(expiry);
+}
+
 window.onload = () => {
     const storedToken = localStorage.getItem('drive_access_token');
     const storedExpiry = localStorage.getItem('drive_token_expiry');
@@ -53,6 +58,7 @@ window.onload = () => {
                 localStorage.setItem('drive_access_token', currentAccessToken);
                 const expiresIn = tokenResponse.expires_in || 3599;
                 localStorage.setItem('drive_token_expiry', Date.now() + (expiresIn * 1000));
+                localStorage.setItem('drive_has_granted', '1');
                 executeDriveUpload(currentAccessToken);
             }
         },
@@ -60,10 +66,17 @@ window.onload = () => {
 };
 
 document.getElementById('sv').addEventListener('click', () => {
-    if (currentAccessToken && localStorage.getItem('drive_token_expiry') && Date.now() < parseInt(localStorage.getItem('drive_token_expiry'))) {
+    const { maxRow } = engine.getUsedBounds();
+    if (maxRow === 0) {
+        showToast('Nothing to save — spreadsheet is empty.');
+        return;
+    }
+    if (tokenIsValid()) {
         executeDriveUpload(currentAccessToken);
+    } else if (localStorage.getItem('drive_has_granted')) {
+        tokenClient.requestAccessToken({ prompt: '' });
     } else {
-        tokenClient.requestAccessToken();
+        tokenClient.requestAccessToken({ prompt: 'consent' });
     }
 });
 
@@ -151,6 +164,11 @@ document.getElementById('ex').addEventListener('click', () => {
 });
 
 function executeDriveUpload(accessToken) {
+    const { maxRow } = engine.getUsedBounds();
+    if (maxRow === 0) {
+        showToast('Nothing to save — spreadsheet is empty.');
+        return;
+    }
     const title = titleInput.value.trim() || 'untitled';
     const csvContent = generateCSV();
     const fileBlob = new Blob([csvContent], { type: 'text/csv' });

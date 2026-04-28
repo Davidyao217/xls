@@ -69,7 +69,7 @@ export function initUI(engine) {
     c = Math.max(0, Math.min(c, COLS - 1));
     r = Math.max(1, Math.min(r, ROWS));
     const oi = mid(sc, sr), ni = mid(c, r);
-    if (inp[oi]) inp[oi].classList.remove('sel');
+    if (inp[mid(anchorCol, anchorRow)]) inp[mid(anchorCol, anchorRow)].classList.remove('sel');
     sc = c; sr = r;
     anchorCol = endCol = c;
     anchorRow = endRow = r;
@@ -153,7 +153,7 @@ export function initUI(engine) {
     const before = val.slice(0, input.selectionStart).trimEnd();
     if (!before.length) return false;
     const last = before[before.length - 1];
-    return last === '(' || last === ',';
+    return '(,=+-*/^%&<>'.includes(last);
   }
 
   function buildRangeRef(c1, r1, c2, r2) {
@@ -448,7 +448,7 @@ export function initUI(engine) {
         rangeMode = anchorCol !== endCol || anchorRow !== endRow;
         highlightRange();
       } else {
-        selectCell(sc + dc, sr + dr);
+        selectCell(anchorCol + dc, anchorRow + dr);  
       }
       return;
     }

@@ -126,4 +126,41 @@ test.describe('Spreadsheet E2E', () => {
 
     await expect(cellB1).toHaveText('6');
   });
+
+  test('should insert cell ref after operator in formula', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.type('10');
+    await page.keyboard.press('Enter');
+    await page.locator('#xA2').click();
+    await page.keyboard.type('3');
+    await page.keyboard.press('Enter');
+
+    const cellB1 = page.locator('#xB1');
+    await cellB1.click();
+    await page.keyboard.type('=A1-');
+
+    await page.locator('#xA2').click();
+    await page.keyboard.press('Enter');
+
+    await expect(cellB1).toHaveText('7');
+  });
+
+  test('should insert range ref after bare = in formula', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.type('5');
+    await page.keyboard.press('Enter');
+
+    const cellB1 = page.locator('#xB1');
+    await cellB1.click();
+    await page.keyboard.type('=');
+
+    const cellA1 = page.locator('#xA1');
+    await cellA1.hover();
+    await page.mouse.down();
+    await page.mouse.up();
+
+    await page.keyboard.press('Enter');
+
+    await expect(cellB1).toHaveText('5');
+  });
 });

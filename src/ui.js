@@ -184,9 +184,11 @@ export function initUI(engine) {
 
   function cancelEdit() {
     if (!editing) return;
+    const anchorId = mid(sel.anchor.col, sel.anchor.row);
     editor.style.display = 'none';
     editing = false;
     gc.focus();
+    fb.value = engine.getData()[anchorId] ?? '';
   }
 
   // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -510,6 +512,7 @@ export function initUI(engine) {
   fb.addEventListener('keydown', e => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       const { col, row } = sel.anchor;
       gc.focus();
       setSelection({ col, row: row + 1 });

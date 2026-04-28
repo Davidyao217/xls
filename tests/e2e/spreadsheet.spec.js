@@ -1188,7 +1188,7 @@ test.describe('Formula Bar History', () => {
   test('multiple keystrokes in formula bar produce a single undo entry', async ({ page }) => {
     await page.locator('#xA1').click();
     await page.locator('#fb').click();
-    await page.locator('#fb').fill('hello world');
+    await page.keyboard.type('hello world');
     await page.keyboard.press('Enter');
     await expect(page.locator('#xA1')).toHaveText('hello world');
 
@@ -1200,12 +1200,12 @@ test.describe('Formula Bar History', () => {
   test('refocusing formula bar starts a fresh history session', async ({ page }) => {
     await page.locator('#xA1').click();
     await page.locator('#fb').click();
-    await page.locator('#fb').fill('first');
+    await page.keyboard.type('first');
     await page.keyboard.press('Enter');
 
     await page.locator('#xA1').click();
     await page.locator('#fb').click();
-    await page.locator('#fb').fill('second');
+    await page.keyboard.type('second');
     await page.keyboard.press('Enter');
 
     await page.locator('#xA1').click();

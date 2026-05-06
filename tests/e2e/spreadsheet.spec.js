@@ -1638,3 +1638,272 @@ test.describe('Complex Interaction Sequences', () => {
     await expect(page.locator('#aci')).toHaveText('B2');
   });
 });
+
+// ─── QUICK_ENTRY Pristine Caret Navigation ────────────────────────────────────
+
+test.describe('QUICK_ENTRY Pristine Caret Navigation', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('typing a char then ArrowRight commits value and navigates right', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('a');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xB2')).toHaveText('a');
+    await expect(page.locator('#aci')).toHaveText('C2');
+    await expect(page.locator('#ed')).not.toBeVisible();
+  });
+
+  test('typing a char then ArrowDown commits value and navigates down', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('x');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#xB2')).toHaveText('x');
+    await expect(page.locator('#aci')).toHaveText('B3');
+    await expect(page.locator('#ed')).not.toBeVisible();
+  });
+
+  test('typing a char then ArrowLeft commits value and navigates left', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('z');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('#xB2')).toHaveText('z');
+    await expect(page.locator('#aci')).toHaveText('A2');
+    await expect(page.locator('#ed')).not.toBeVisible();
+  });
+
+  test('typing a char then ArrowUp commits value and navigates up', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('q');
+    await page.keyboard.press('ArrowUp');
+    await expect(page.locator('#xB2')).toHaveText('q');
+    await expect(page.locator('#aci')).toHaveText('B1');
+    await expect(page.locator('#ed')).not.toBeVisible();
+  });
+
+  test('typing multiple chars then Arrow commits the full value', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.type('hello');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xA1')).toHaveText('hello');
+    await expect(page.locator('#aci')).toHaveText('B1');
+    await expect(page.locator('#ed')).not.toBeVisible();
+  });
+
+  test('QUICK_ENTRY arrow navigation updates formula bar to destination cell value', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.type('7');
+    await page.keyboard.press('Enter');
+    await page.locator('#xA2').click();
+    await page.keyboard.press('5');
+    await page.keyboard.press('ArrowUp');
+    await expect(page.locator('#xA2')).toHaveText('5');
+    await expect(page.locator('#aci')).toHaveText('A1');
+    await expect(page.locator('#fb')).toHaveValue('7');
+  });
+
+  test('Shift+Arrow in QUICK_ENTRY dirties caret — subsequent plain Arrow does not navigate', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('h');
+    await page.keyboard.press('Shift+ArrowRight');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#aci')).toHaveText('B2');
+    await expect(page.locator('#ed')).toBeVisible();
+  });
+
+  test('Enter opens DEEP_EDIT — first Arrow does not navigate', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#aci')).toHaveText('B2');
+    await expect(page.locator('#ed')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('F2 opens DEEP_EDIT — first Arrow does not navigate', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('F2');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#aci')).toHaveText('B2');
+    await expect(page.locator('#ed')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('double-click opens DEEP_EDIT — first Arrow does not navigate', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.locator('#xB2').dblclick();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#aci')).toHaveText('B2');
+    await expect(page.locator('#ed')).toBeVisible();
+    await page.keyboard.press('Escape');
+  });
+
+  test('QUICK_ENTRY arrow navigation clamps at grid boundary', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('v');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('#xA1')).toHaveText('v');
+    await expect(page.locator('#aci')).toHaveText('A1');
+  });
+});
+
+// ─── Keyboard Formula Pointing ────────────────────────────────────────────────
+
+test.describe('Keyboard Formula Pointing', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+  });
+
+  test('regression: typing = then Arrow enters formula pointing, not commit+navigate', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#aci')).toHaveText('B2');
+    await expect(page.locator('#ed')).toBeVisible();
+    await expect(page.locator('#ed')).toHaveValue('=C2');
+  });
+
+  test('ArrowRight inserts the cell ref to the right', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=B1');
+    await expect(page.locator('#fb')).toHaveValue('=B1');
+  });
+
+  test('consecutive arrows move the pointed cell', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=B1');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=C1');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#ed')).toHaveValue('=C2');
+  });
+
+  test('Shift+Arrow extends to a range ref', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=B1');
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=B1:C1');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('#ed')).toHaveValue('=B1:C2');
+  });
+
+  test('multiple Shift+Arrow presses extend the range further', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('#ed')).toHaveValue('=A2:A4');
+  });
+
+  test('plain Arrow after a range extension collapses back to a single ref', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=B1:C1');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#ed')).toHaveValue('=C1');
+  });
+
+  test('formula pointing works after an operator in a formula', async ({ page }) => {
+    await page.locator('#xC1').click();
+    await page.keyboard.type('=A1+');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('#ed')).toHaveValue('=A1+C2');
+    await expect(page.locator('#fb')).toHaveValue('=A1+C2');
+  });
+
+  test('formula pointing works inside a function argument', async ({ page }) => {
+    await page.locator('#xB2').click();
+    await page.keyboard.type('=SUM(');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('#ed')).toHaveValue('=SUM(A2');
+  });
+
+  test('formula-ref highlight appears on the pointed cell', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xB1')).toHaveClass(/formula-ref/);
+  });
+
+  test('formula-ref highlight covers the full pointed range', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Shift+ArrowRight');
+    await expect(page.locator('#xB1')).toHaveClass(/formula-ref/);
+    await expect(page.locator('#xC1')).toHaveClass(/formula-ref/);
+  });
+
+  test('formula-ref highlight moves to the new cell on each Arrow press', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xB1')).toHaveClass(/formula-ref/);
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xC1')).toHaveClass(/formula-ref/);
+    await expect(page.locator('#xB1')).not.toHaveClass(/formula-ref/);
+  });
+
+  test('typing a non-arrow key exits formula pointing and appends to formula', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xB1')).toHaveClass(/formula-ref/);
+    await page.keyboard.press('+');
+    await expect(page.locator('#xB1')).not.toHaveClass(/formula-ref/);
+    await expect(page.locator('#ed')).toHaveValue('=B1+');
+    await expect(page.locator('#ed')).toBeVisible();
+  });
+
+  test('Enter commits the formula with the pointed reference', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.type('42');
+    await page.keyboard.press('Enter');
+    await page.locator('#xB1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('#ed')).toHaveValue('=A1');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#xB1')).toHaveText('42');
+    await expect(page.locator('#ed')).not.toBeVisible();
+  });
+
+  test('Enter commits range formula and evaluates correctly', async ({ page }) => {
+    for (const [id, val] of [['#xA1', '10'], ['#xA2', '20'], ['#xA3', '30']]) {
+      await page.locator(id).click();
+      await page.keyboard.type(val);
+      await page.keyboard.press('Enter');
+    }
+    await page.locator('#xB1').click();
+    await page.keyboard.type('=SUM(');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    await expect(page.locator('#ed')).toHaveValue('=SUM(A1:A3');
+    await page.keyboard.type(')');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#xB1')).toHaveText('60');
+  });
+
+  test('Escape cancels edit and clears formula-ref highlight', async ({ page }) => {
+    await page.locator('#xA1').click();
+    await page.keyboard.press('=');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#xB1')).toHaveClass(/formula-ref/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#ed')).not.toBeVisible();
+    await expect(page.locator('#xB1')).not.toHaveClass(/formula-ref/);
+    await expect(page.locator('#xA1')).toHaveText('');
+  });
+
+});
